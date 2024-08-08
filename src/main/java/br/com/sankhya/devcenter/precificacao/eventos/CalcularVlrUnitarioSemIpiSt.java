@@ -37,45 +37,49 @@ public class CalcularVlrUnitarioSemIpiSt implements EventoProgramavelJava {
             DynamicVO itemVO = (DynamicVO) event.getVo();
 
             BigDecimal nuNota = itemVO.asBigDecimalOrZero("NUNOTA");
-            BigDecimal vlrUnitario = itemVO.asBigDecimalOrZero("VLRUNIT");
-            BigDecimal quantidade = itemVO.asBigDecimalOrZero("QTDNEG");
-            BigDecimal vlrTotalIpi = itemVO.asBigDecimalOrZero("VLRIPI");
-            BigDecimal vlrTotalSt = itemVO.asBigDecimalOrZero("VLRSUBST");
-            BigDecimal aliqIpi = itemVO.asBigDecimalOrZero("ALIQIPI");
-            BigDecimal vlrUnitarioSt, vlrUnitarioIpi, percIpiUnitario, percStUnitario, vlrUnitarioNew, vlrTotalNew;
-
-            logger.info("Valor unitario: " + vlrUnitario);
-            logger.info("Quantidade: " + quantidade);
-            logger.info("Valor total IPI: " + vlrTotalIpi);
-            logger.info("Valor total ST: " + vlrTotalSt);
 
             Boolean calcularVlrUnitario = verificarConfiguracaoDaTop(nuNota);
 
-            logger.info("Calcular valor unitario: " + calcularVlrUnitario);
-
             if(calcularVlrUnitario){
-                logger.info("Calculando valor unitario");
-                vlrUnitarioIpi = vlrTotalIpi.divide(quantidade, MathContext.DECIMAL128);
-                vlrUnitarioSt = vlrTotalSt.divide(quantidade, MathContext.DECIMAL128);
-                percIpiUnitario = vlrUnitarioIpi.divide(vlrUnitario, MathContext.DECIMAL128);
-                percStUnitario = vlrUnitarioSt.divide(vlrUnitario, MathContext.DECIMAL128);
-
-                vlrUnitarioNew = vlrUnitario.divide(new BigDecimal(1).add(percIpiUnitario).add(percStUnitario), MathContext.DECIMAL128);
-                vlrTotalNew = vlrUnitarioNew.multiply(quantidade).setScale(2, RoundingMode.HALF_EVEN);
-
-                itemVO.setProperty("VLRUNIT", vlrUnitarioNew);
-                itemVO.setProperty("VLRTOT", vlrTotalNew);
-
-                if(vlrTotalIpi.compareTo(BigDecimal.ZERO) > 0){
-                    itemVO.setProperty("BASEIPI", vlrTotalNew);
-                    itemVO.setProperty("VLRIPI", vlrTotalNew.multiply(aliqIpi).divide(new BigDecimal(100), MathContext.DECIMAL128));
-                }
-
+                calcularVlrUnitario(itemVO);
             }
 
         }catch (Exception e){
             throw new Exception("ERRO: " + e.getMessage());
         }
+    }
+
+    private void calcularVlrUnitario(DynamicVO itemVO) {
+        logger.info("Entrou no método calcularVlrUnitario");
+
+        BigDecimal vlrUnitario = itemVO.asBigDecimalOrZero("VLRUNIT");
+        BigDecimal quantidade = itemVO.asBigDecimalOrZero("QTDNEG");
+        BigDecimal vlrTotalIpi = itemVO.asBigDecimalOrZero("VLRIPI");
+        BigDecimal vlrTotalSt = itemVO.asBigDecimalOrZero("VLRSUBST");
+        BigDecimal aliqIpi = itemVO.asBigDecimalOrZero("ALIQIPI");
+        BigDecimal vlrUnitarioSt, vlrUnitarioIpi, percIpiUnitario, percStUnitario, vlrUnitarioNew, vlrTotalNew;
+
+        logger.info("Valor unitario: " + vlrUnitario);
+        logger.info("Quantidade: " + quantidade);
+        logger.info("Valor total IPI: " + vlrTotalIpi);
+        logger.info("Valor total ST: " + vlrTotalSt);
+
+        vlrUnitarioIpi = vlrTotalIpi.divide(quantidade, MathContext.DECIMAL128);
+        vlrUnitarioSt = vlrTotalSt.divide(quantidade, MathContext.DECIMAL128);
+        percIpiUnitario = vlrUnitarioIpi.divide(vlrUnitario, MathContext.DECIMAL128);
+        percStUnitario = vlrUnitarioSt.divide(vlrUnitario, MathContext.DECIMAL128);
+
+        vlrUnitarioNew = vlrUnitario.divide(new BigDecimal(1).add(percIpiUnitario).add(percStUnitario), MathContext.DECIMAL128);
+        vlrTotalNew = vlrUnitarioNew.multiply(quantidade).setScale(2, RoundingMode.HALF_EVEN);
+
+        itemVO.setProperty("VLRUNIT", vlrUnitarioNew);
+        itemVO.setProperty("VLRTOT", vlrTotalNew);
+
+            if(vlrTotalIpi.compareTo(BigDecimal.ZERO) > 0){
+                itemVO.setProperty("BASEIPI", vlrTotalNew);
+                itemVO.setProperty("VLRIPI", vlrTotalNew.multiply(aliqIpi).divide(new BigDecimal(100), MathContext.DECIMAL128));
+            }
+
     }
 
     private Boolean verificarConfiguracaoDaTop(BigDecimal nuNota) throws Exception {
@@ -150,7 +154,29 @@ public class CalcularVlrUnitarioSemIpiSt implements EventoProgramavelJava {
 
     @Override
     public void afterUpdate(PersistenceEvent event) throws Exception {
+        try {
+            DynamicVO vo = (DynamicVO) event.getVo();
+            BigDecimal nuNota = vo.asBigDecimalOrZero("NUNOTA");
 
+            Boolean calcularVlrUnitario = verificarConfiguracaoDaTop(nuNota);
+
+            if(calcularVlrUnitario) {
+
+                final ImpostosHelpper impostosHelper = new ImpostosHelpper();
+                impostosHelper.calcularImpostos(nuNota);
+                impostosHelper.totalizarNota(nuNota);
+
+                final CentralFinanceiro centralFinanceiro = new CentralFinanceiro();
+                centralFinanceiro.inicializaNota(nuNota);
+                centralFinanceiro.refazerFinanceiro();
+
+            }
+
+        } catch (Exception e) {
+            MGEModelException.throwMe(e);
+        }finally {
+            JdbcWrapper.closeSession(jdbc);
+        }
     }
 
     @Override
