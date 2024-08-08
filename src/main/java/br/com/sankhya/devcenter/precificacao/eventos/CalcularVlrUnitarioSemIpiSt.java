@@ -75,6 +75,7 @@ public class CalcularVlrUnitarioSemIpiSt implements EventoProgramavelJava {
 
         itemVO.setProperty("VLRUNIT", vlrUnitarioNew);
         itemVO.setProperty("VLRTOT", vlrTotalNew);
+        itemVO.setProperty("AD_VLRUNITBRUTO", vlrUnitario);
 
             if(vlrTotalIpi.compareTo(BigDecimal.ZERO) > 0){
                 itemVO.setProperty("BASEIPI", vlrTotalNew);
