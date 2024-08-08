@@ -37,7 +37,6 @@ public class CalcularVlrUnitarioSemIpiSt implements EventoProgramavelJava {
             DynamicVO itemVO = (DynamicVO) event.getVo();
 
             BigDecimal nuNota = itemVO.asBigDecimalOrZero("NUNOTA");
-
             Boolean calcularVlrUnitario = verificarConfiguracaoDaTop(nuNota);
 
             if(calcularVlrUnitario){
@@ -49,10 +48,12 @@ public class CalcularVlrUnitarioSemIpiSt implements EventoProgramavelJava {
         }
     }
 
-    private void calcularVlrUnitario(DynamicVO itemVO) {
+    private void calcularVlrUnitario(DynamicVO itemVO) throws Exception {
         logger.info("Entrou no método calcularVlrUnitario");
 
-        BigDecimal vlrUnitario = itemVO.asBigDecimalOrZero("VLRUNIT");
+        BigDecimal codProd = itemVO.asBigDecimalOrZero("CODPROD");
+        int qtdCasasDecimaisValor = buscarQtdCasasDecimaisParaValor(codProd);
+        BigDecimal vlrUnitario = itemVO.asBigDecimalOrZero("VLRUNIT").setScale(qtdCasasDecimaisValor, RoundingMode.HALF_EVEN);
         BigDecimal quantidade = itemVO.asBigDecimalOrZero("QTDNEG");
         BigDecimal vlrTotalIpi = itemVO.asBigDecimalOrZero("VLRIPI");
         BigDecimal vlrTotalSt = itemVO.asBigDecimalOrZero("VLRSUBST");
@@ -64,13 +65,13 @@ public class CalcularVlrUnitarioSemIpiSt implements EventoProgramavelJava {
         logger.info("Valor total IPI: " + vlrTotalIpi);
         logger.info("Valor total ST: " + vlrTotalSt);
 
-        vlrUnitarioIpi = vlrTotalIpi.divide(quantidade, MathContext.DECIMAL128);
-        vlrUnitarioSt = vlrTotalSt.divide(quantidade, MathContext.DECIMAL128);
-        percIpiUnitario = vlrUnitarioIpi.divide(vlrUnitario, MathContext.DECIMAL128);
-        percStUnitario = vlrUnitarioSt.divide(vlrUnitario, MathContext.DECIMAL128);
+        vlrUnitarioIpi = vlrTotalIpi.divide(quantidade, MathContext.DECIMAL128).setScale(2,RoundingMode.HALF_EVEN);
+        vlrUnitarioSt = vlrTotalSt.divide(quantidade, MathContext.DECIMAL128).setScale(2, RoundingMode.HALF_EVEN);
+        percIpiUnitario = vlrUnitarioIpi.divide(vlrUnitario, MathContext.DECIMAL128).setScale(6, RoundingMode.HALF_EVEN);
+        percStUnitario = vlrUnitarioSt.divide(vlrUnitario, MathContext.DECIMAL128).setScale(6, RoundingMode.HALF_EVEN);
 
-        vlrUnitarioNew = vlrUnitario.divide(new BigDecimal(1).add(percIpiUnitario).add(percStUnitario), MathContext.DECIMAL128);
-        vlrTotalNew = vlrUnitarioNew.multiply(quantidade).setScale(2, RoundingMode.HALF_EVEN);
+        vlrUnitarioNew = vlrUnitario.divide(new BigDecimal(1).add(percIpiUnitario).add(percStUnitario), MathContext.DECIMAL128).setScale(qtdCasasDecimaisValor, RoundingMode.HALF_EVEN);
+        vlrTotalNew = (vlrUnitarioNew.multiply(quantidade)).setScale(qtdCasasDecimaisValor, RoundingMode.HALF_EVEN);
 
         itemVO.setProperty("VLRUNIT", vlrUnitarioNew);
         itemVO.setProperty("VLRTOT", vlrTotalNew);
@@ -80,6 +81,37 @@ public class CalcularVlrUnitarioSemIpiSt implements EventoProgramavelJava {
                 itemVO.setProperty("VLRIPI", vlrTotalNew.multiply(aliqIpi).divide(new BigDecimal(100), MathContext.DECIMAL128));
             }
 
+    }
+
+    private int buscarQtdCasasDecimaisParaValor(BigDecimal codProd) throws Exception {
+        logger.info("Entrou no método buscarQtdCasasDecimaisParaValor");
+
+        JdbcWrapper jdbc = null;
+        NativeSql sql = null;
+        EntityFacade entityFacade = EntityFacadeFactory.getDWFFacade();
+        jdbc = entityFacade.getJdbcWrapper();
+        ResultSet resultSet = null;
+
+        try{
+            sql = new NativeSql(jdbc);
+            sql.appendSql("SELECT COALESCE(PRO.DECVLR,2) AS DECVLR FROM TGFPRO PRO\n" +
+                    "WHERE PRO.CODPROD = :CODPROD");
+            sql.setNamedParameter("CODPROD", codProd);
+
+            resultSet = sql.executeQuery();
+
+            if(resultSet.next()){
+                return resultSet.getInt("DECVLR");
+            }
+
+        }catch (Exception e){
+            throw new Exception("ERRO Método buscarQtdCasasDecimaisParaValor: " + e.getMessage());
+        }finally {
+            JdbcUtils.closeResultSet(resultSet);
+            NativeSql.releaseResources(sql);
+            JdbcWrapper.closeSession(jdbc);
+        }
+        return 2;
     }
 
     private Boolean verificarConfiguracaoDaTop(BigDecimal nuNota) throws Exception {
@@ -115,7 +147,27 @@ public class CalcularVlrUnitarioSemIpiSt implements EventoProgramavelJava {
 
     @Override
     public void beforeUpdate(PersistenceEvent event) throws Exception {
+        logger.info("Entrou no beforeUpdate");
+        try{
+            DynamicVO itemVO = (DynamicVO) event.getVo();
+            DynamicVO oldItemVO = (DynamicVO) event.getOldVO();
 
+            BigDecimal codProd = itemVO.asBigDecimalOrZero("CODPROD");
+            int qtdCasasDecimaisValor = buscarQtdCasasDecimaisParaValor(codProd);
+            BigDecimal nuNota = itemVO.asBigDecimalOrZero("NUNOTA");
+            BigDecimal vlrUnitario = itemVO.asBigDecimalOrZero("VLRUNIT").setScale(qtdCasasDecimaisValor,RoundingMode.HALF_EVEN);
+            BigDecimal vlrUnitarioOld = oldItemVO.asBigDecimalOrZero("VLRUNIT").setScale(qtdCasasDecimaisValor,RoundingMode.HALF_EVEN);
+
+            Boolean calcularVlrUnitario = verificarConfiguracaoDaTop(nuNota);
+
+            if(calcularVlrUnitario && (vlrUnitarioOld.compareTo(vlrUnitario) != 0)){
+                logger.info("Entrou no if do calcular do update. Vlr. Unit. Anterior: " + vlrUnitarioOld + " Vlr. Unit. Atual: " + vlrUnitario);
+                calcularVlrUnitario(itemVO);
+            }
+
+        }catch (Exception e){
+            throw new Exception("ERRO: " + e.getMessage());
+        }
     }
 
     @Override
@@ -129,7 +181,6 @@ public class CalcularVlrUnitarioSemIpiSt implements EventoProgramavelJava {
         try {
             DynamicVO vo = (DynamicVO) event.getVo();
             BigDecimal nuNota = vo.asBigDecimalOrZero("NUNOTA");
-
             Boolean calcularVlrUnitario = verificarConfiguracaoDaTop(nuNota);
 
             if(calcularVlrUnitario) {
@@ -157,7 +208,6 @@ public class CalcularVlrUnitarioSemIpiSt implements EventoProgramavelJava {
         try {
             DynamicVO vo = (DynamicVO) event.getVo();
             BigDecimal nuNota = vo.asBigDecimalOrZero("NUNOTA");
-
             Boolean calcularVlrUnitario = verificarConfiguracaoDaTop(nuNota);
 
             if(calcularVlrUnitario) {
