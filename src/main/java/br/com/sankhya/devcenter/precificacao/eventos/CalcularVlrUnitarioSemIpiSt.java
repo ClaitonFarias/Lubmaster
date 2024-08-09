@@ -2,13 +2,17 @@ package br.com.sankhya.devcenter.precificacao.eventos;
 
 import br.com.sankhya.extensions.eventoprogramavel.EventoProgramavelJava;
 import br.com.sankhya.jape.EntityFacade;
+import br.com.sankhya.jape.bmp.PersistentLocalEntity;
 import br.com.sankhya.jape.dao.JdbcWrapper;
 import br.com.sankhya.jape.event.PersistenceEvent;
 import br.com.sankhya.jape.event.TransactionContext;
 import br.com.sankhya.jape.sql.NativeSql;
 import br.com.sankhya.jape.vo.DynamicVO;
 import br.com.sankhya.modelcore.MGEModelException;
+import br.com.sankhya.modelcore.RegraDinamicaHelper;
 import br.com.sankhya.modelcore.comercial.CentralFinanceiro;
+import br.com.sankhya.modelcore.comercial.LiberacaoAlcadaHelper;
+import br.com.sankhya.modelcore.comercial.LiberacaoSolicitada;
 import br.com.sankhya.modelcore.util.EntityFacadeFactory;
 import com.sankhya.util.JdbcUtils;
 import org.apache.log4j.LogManager;
