@@ -74,7 +74,9 @@ public class ValidarVlrDigitadovPrecoMinimoRegra implements Regra {
 
             if(topConfigParaCalcularVlrUnitario){
 
-                BigDecimal precoMinimo = buscarPrecoMinimo(nuNota, codProd, codLocal, controle);
+                BigDecimal nuTab = NativeSql.getBigDecimal("TPV.AD_CODTABVLRMIN", "TGFTPV TPV, TGFCAB CAB", "TPV.CODTIPVENDA = CAB.CODTIPVENDA AND TPV.DHALTER = CAB.DHTIPVENDA AND CAB.NUNOTA = ?", new Object[]{nuNota});
+
+                BigDecimal precoMinimo = buscarPrecoMinimo(nuTab, codProd, codLocal, controle);
 
                 if(vlrUnitBrutoDigitado.compareTo(precoMinimo) < 0){
                     LiberacaoAlcadaHelper.apagaSolicitacoEvento(evento,nuNota,tabela,sequencia);
@@ -123,7 +125,7 @@ public class ValidarVlrDigitadovPrecoMinimoRegra implements Regra {
     }
 
 
-    private BigDecimal buscarPrecoMinimo(BigDecimal nuNota, BigDecimal codProd, BigDecimal codLocal, String controle) throws Exception {
+    private BigDecimal buscarPrecoMinimo(BigDecimal nuTab, BigDecimal codProd, BigDecimal codLocal, String controle) throws Exception {
         logger.info("Entrou no método buscarPrecoMinimo");
 
         JdbcWrapper jdbc = null;
@@ -134,49 +136,9 @@ public class ValidarVlrDigitadovPrecoMinimoRegra implements Regra {
 
         try{
             sql = new NativeSql(jdbc);
-            sql.appendSql("/*BUSCA O VALOR CONSIDERANDO GESTÃO DE PREÇO POR LOCAL E CONTROLE*/\n" +
-                    "        SELECT\n" +
-                    "            COALESCE(EXC.VLRVENDA,0) AS PRECOMIN\n" +
-                    "        FROM TGFCAB CAB\n" +
-                    "            INNER JOIN TGFTPV TPV ON (TPV.CODTIPVENDA = CAB.CODTIPVENDA AND TPV.DHALTER = CAB.DHTIPVENDA)\n" +
-                    "            INNER JOIN TGFTAB TAB ON (TAB.CODTAB = TPV.AD_CODTABVLRMIN)\n" +
-                    "            INNER JOIN TGFEXC EXC ON (EXC.NUTAB = TAB.NUTAB AND EXC.CODPROD = :CODPROD AND EXC.CODLOCAL = :CODLOCAL AND EXC.CONTROLE = :CONTROLE)\n" +
-                    "        WHERE CAB.NUNOTA = :NUNOTA\n" +
-                    "\n" +
-                    "        UNION\n" +
-                    "\n" +
-                    "        /*BUSCA O VALOR CONSIDERANDO GESTÃO DE PREÇO POR CONTROLE*/\n" +
-                    "        SELECT\n" +
-                    "            COALESCE(EXC.VLRVENDA,0) AS PRECOMIN\n" +
-                    "        FROM TGFCAB CAB\n" +
-                    "            INNER JOIN TGFTPV TPV ON (TPV.CODTIPVENDA = CAB.CODTIPVENDA AND TPV.DHALTER = CAB.DHTIPVENDA)\n" +
-                    "            INNER JOIN TGFTAB TAB ON (TAB.CODTAB = TPV.AD_CODTABVLRMIN)\n" +
-                    "            INNER JOIN TGFEXC EXC ON (EXC.NUTAB = TAB.NUTAB AND EXC.CODPROD = :CODPROD AND EXC.CONTROLE = :CONTROLE)\n" +
-                    "        WHERE CAB.NUNOTA = :NUNOTA\n" +
-                    "\n" +
-                    "        UNION\n" +
-                    "\n" +
-                    "        /*BUSCA O VALOR CONSIDERANDO GESTÃO DE PREÇO POR LOCAL*/\n" +
-                    "        SELECT\n" +
-                    "            COALESCE(EXC.VLRVENDA,0) AS PRECOMIN\n" +
-                    "        FROM TGFCAB CAB\n" +
-                    "            INNER JOIN TGFTPV TPV ON (TPV.CODTIPVENDA = CAB.CODTIPVENDA AND TPV.DHALTER = CAB.DHTIPVENDA)\n" +
-                    "            INNER JOIN TGFTAB TAB ON (TAB.CODTAB = TPV.AD_CODTABVLRMIN)\n" +
-                    "            INNER JOIN TGFEXC EXC ON (EXC.NUTAB = TAB.NUTAB AND EXC.CODPROD = :CODPROD AND EXC.CODLOCAL = :CODLOCAL)\n" +
-                    "        WHERE CAB.NUNOTA = :NUNOTA\n" +
-                    "\n" +
-                    "        UNION\n" +
-                    "\n" +
-                    "        /*BUSCA O VALOR CONSIDERANDO GESTÃO DE PREÇO SEM LOCAL E SEM CONTROLE*/\n" +
-                    "        SELECT\n" +
-                    "            COALESCE(EXC.VLRVENDA,0) AS PRECOMIN\n" +
-                    "        FROM TGFCAB CAB\n" +
-                    "            INNER JOIN TGFTPV TPV ON (TPV.CODTIPVENDA = CAB.CODTIPVENDA AND TPV.DHALTER = CAB.DHTIPVENDA)\n" +
-                    "            INNER JOIN TGFTAB TAB ON (TAB.CODTAB = TPV.AD_CODTABVLRMIN)\n" +
-                    "            INNER JOIN TGFEXC EXC ON (EXC.NUTAB = TAB.NUTAB AND EXC.CODPROD = :CODPROD)\n" +
-                    "        WHERE CAB.NUNOTA = :NUNOTA");
+            sql.appendSql("SELECT AD_FNC_BUSCAR_PRECO_MIN_MAX(:NUTAB,:CODPROD,:CONTROLE,:CODLOCAL) AS PRECOMIN FROM DUAL");
 
-            sql.setNamedParameter("NUNOTA", nuNota);
+            sql.setNamedParameter("NUTAB", nuTab);
             sql.setNamedParameter("CODPROD", codProd);
             sql.setNamedParameter("CODLOCAL", codLocal);
             sql.setNamedParameter("CONTROLE", controle);
