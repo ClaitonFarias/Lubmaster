@@ -1,74 +1,76 @@
-CREATE OR REPLACE FUNCTION AD_FNC_CALCULAR_COM_LUBMASTER(P_NUNOTA INT)
+create or replace FUNCTION AD_FNC_CALCULAR_COM_LUBMASTER(P_NUNOTA INT)
 RETURN NUMBER
 AS
-
+PRAGMA AUTONOMOUS_TRANSACTION;
 BEGIN
+/*
+    Autor: Claiton Farias
+    Data: Agosto/24
+    Objetivo: Calcular a comissão das notas conforme regra da empresa, essa função é utilizada na fórmula de comissão dentro do Sankhya
+*/
     DECLARE
-    V_PERCCOMX  FLOAT;
-    V_PERCCOMY  FLOAT;
-    V_PERCCOMISSAO  FLOAT;
     V_VLRCOMISSAO   FLOAT;
-    V_VLRCOMACUMULADA   FLOAT;
     V_VLRCOMFIM     FLOAT;
     V_QTDITENS      INT;
 
     BEGIN
 
-    V_VLRCOMACUMULADA := 0;
+    V_VLRCOMFIM := 0;
 
-        FOR X IN (WITH DADOS AS
+       SELECT
+         SUM((CASE WHEN Z.VLRUNIT <= Z.MEDIAPRECO
+            THEN ROUND(((Z.VLRUNIT * (ROUND(((Z.PERCCOMX + Z.PERCCOMY) / 2),3) / 100)) * Z.QTDNEG),3)
+            ELSE ROUND(((Z.PRECOMAX * (ROUND(((Z.PERCCOMX + Z.PERCCOMY) / 2),3) / 100)) * Z.QTDNEG),3)
+            END)) AS VLRCOMISSAO
+            INTO V_VLRCOMISSAO
+        FROM
         (
-            SELECT
-                ITE.SEQUENCIA
-                , ITE.QTDNEG
-                , ITE.CODPROD
-                , ITE.CODLOCALORIG
-                , ITE.CONTROLE
-                , ITE.VLRUNIT
-                , TPV.AD_CODTABVLRMIN
-                , TPV.AD_CODTABVLRMAX
-                , COALESCE(VEN.AD_COMPRECMIN,0) AS PERCCOMMIN
-                , COALESCE(VEN.AD_COMPRECMAX,0) AS PERCCOMMAX
-                , AD_FNC_BUSCAR_PRECO_MIN_MAX(AD_CODTABVLRMIN,ITE.CODPROD,ITE.CONTROLE,ITE.CODLOCALORIG) AS PRECOMIN
-                , AD_FNC_BUSCAR_PRECO_MIN_MAX(AD_CODTABVLRMAX,ITE.CODPROD,ITE.CONTROLE,ITE.CODLOCALORIG) AS PRECOMAX
-            FROM TGFCAB CAB
-                INNER JOIN TGFTPV TPV ON (TPV.CODTIPVENDA = CAB.CODTIPVENDA AND TPV.DHALTER = CAB.DHTIPVENDA)
-                INNER JOIN TGFITE ITE ON (ITE.NUNOTA = CAB.NUNOTA)
-                INNER JOIN TGFVEN VEN ON (VEN.CODVEND = CAB.CODVEND)
-            WHERE CAB.NUNOTA = P_NUNOTA
-        )
-        SELECT
-            D.SEQUENCIA
-            , D.QTDNEG
-            , D.VLRUNIT
-            , D.PRECOMIN
-            , D.PRECOMAX
-            , D.PERCCOMMIN
-            , D.PERCCOMMAX
-            , ROUND(((D.PRECOMIN + D.PRECOMAX) / 2),3) AS MEDIAPRECO
-            , ROUND(((D.PERCCOMMIN + D.PERCCOMMAX) / 2),3) AS MEDIACOMISSAO
-        FROM DADOS D)
+            WITH DADOS AS
+                    (
+                    SELECT
+                        ITE.SEQUENCIA
+                        , ITE.QTDNEG
+                        , ITE.CODPROD
+                        , ITE.CODLOCALORIG
+                        , ITE.CONTROLE
+                        , ITE.VLRUNIT
+                        , TPV.AD_CODTABVLRMIN
+                        , TPV.AD_CODTABVLRMAX
+                        , COALESCE(VEN.AD_COMPRECMIN,0) AS PERCCOMMIN
+                        , COALESCE(VEN.AD_COMPRECMAX,0) AS PERCCOMMAX
+                        , ROUND(((COALESCE(VEN.AD_COMPRECMIN,0) + COALESCE(VEN.AD_COMPRECMAX,0)) / 2),3) AS MEDIACOMISSAO
+                        , AD_FNC_BUSCAR_PRECO_MIN_MAX(AD_CODTABVLRMIN,ITE.CODPROD,ITE.CONTROLE,ITE.CODLOCALORIG) AS PRECOMIN
+                        , AD_FNC_BUSCAR_PRECO_MIN_MAX(AD_CODTABVLRMAX,ITE.CODPROD,ITE.CONTROLE,ITE.CODLOCALORIG) AS PRECOMAX
+                        , ROUND(((AD_FNC_BUSCAR_PRECO_MIN_MAX(TPV.AD_CODTABVLRMIN,ITE.CODPROD,ITE.CONTROLE,ITE.CODLOCALORIG) + AD_FNC_BUSCAR_PRECO_MIN_MAX(TPV.AD_CODTABVLRMAX,ITE.CODPROD,ITE.CONTROLE,ITE.CODLOCALORIG)) / 2),3) AS MEDIAPRECO
+                    FROM TGFCAB CAB
+                        INNER JOIN TGFTPV TPV ON (TPV.CODTIPVENDA = CAB.CODTIPVENDA AND TPV.DHALTER = CAB.DHTIPVENDA)
+                        INNER JOIN TGFITE ITE ON (ITE.NUNOTA = CAB.NUNOTA)
+                        INNER JOIN TGFVEN VEN ON (VEN.CODVEND = CAB.CODVEND)
+                    WHERE CAB.NUNOTA = P_NUNOTA
+                    )
+                    SELECT
+                        D.SEQUENCIA
+                        , D.QTDNEG
+                        , D.VLRUNIT
+                        , D.PRECOMIN
+                        , D.PRECOMAX
+                        , D.PERCCOMMIN
+                        , D.PERCCOMMAX
+                        , D.MEDIAPRECO
+                        , D.MEDIACOMISSAO
 
-       LOOP
-            IF X.VLRUNIT <= X.MEDIAPRECO THEN
-                V_PERCCOMX := (CASE WHEN X.MEDIAPRECO = 0 THEN 0 ELSE ROUND(((X.VLRUNIT * X.MEDIACOMISSAO) / X.MEDIAPRECO),3) END);
-                V_PERCCOMY := (CASE WHEN X.PERCCOMMIN = 0 THEN 0 ELSE ROUND(((X.VLRUNIT * X.PERCCOMMIN) / X.PRECOMIN),3) END);
-                V_PERCCOMISSAO := ROUND(((V_PERCCOMX + V_PERCCOMY) / 2),3);
-                V_VLRCOMISSAO := ROUND(((X.VLRUNIT * (V_PERCCOMISSAO / 100)) * X.QTDNEG),2);
+                        , (CASE WHEN D.VLRUNIT <= D.MEDIAPRECO
+                            THEN (CASE WHEN D.MEDIAPRECO = 0 THEN 0 ELSE ROUND(((D.VLRUNIT * D.MEDIACOMISSAO) / D.MEDIAPRECO),3) END)
+                            ELSE (CASE WHEN D.PRECOMAX = 0 THEN 0 ELSE ROUND(((D.VLRUNIT * D.PERCCOMMAX) / D.PRECOMAX),3) END)
+                        END) AS PERCCOMX
 
-                V_VLRCOMACUMULADA := V_VLRCOMACUMULADA + V_VLRCOMISSAO;
+                        , (CASE WHEN VLRUNIT <= D.MEDIAPRECO
+                            THEN (CASE WHEN D.PERCCOMMIN = 0 THEN 0 ELSE ROUND(((D.VLRUNIT * D.PERCCOMMIN) / D.PRECOMIN),3) END)
+                            ELSE (CASE WHEN D.MEDIAPRECO = 0 THEN 0 ELSE ROUND(((D.VLRUNIT * D.MEDIACOMISSAO) / D.MEDIAPRECO),3) END)
+                        END) AS PERCCOMY
 
-            ELSIF X.VLRUNIT > X.MEDIAPRECO THEN
-                V_PERCCOMX := (CASE WHEN X.PRECOMAX = 0 THEN 0 ELSE ROUND(((X.VLRUNIT * X.PERCCOMMAX) / X.PRECOMAX),3) END);
-                V_PERCCOMY := (CASE WHEN X.MEDIAPRECO = 0 THEN 0 ELSE ROUND(((X.VLRUNIT * X.MEDIACOMISSAO) / X.MEDIAPRECO),3) END);
-                V_PERCCOMISSAO := ROUND(((V_PERCCOMX + V_PERCCOMY) / 2),3);
-                V_VLRCOMISSAO := ROUND(((X.PRECOMAX * (V_PERCCOMISSAO / 100)) * X.QTDNEG),2);
-
-                V_VLRCOMACUMULADA := V_VLRCOMACUMULADA + V_VLRCOMISSAO;
-
-            END IF;
-
-       END LOOP;
+                    FROM DADOS D
+    )Z;
 
        BEGIN
         SELECT
@@ -81,7 +83,12 @@ BEGIN
         V_QTDITENS :=1;
         END;
 
-        V_VLRCOMFIM := (V_VLRCOMACUMULADA / V_QTDITENS);
+        V_VLRCOMFIM := (V_VLRCOMISSAO / V_QTDITENS);
+
+        BEGIN
+            AD_PRC_ATU_COM_ITEM_LUBMASTER(P_NUNOTA);
+            EXCEPTION WHEN NO_DATA_FOUND THEN NULL;
+        END;
 
      RETURN V_VLRCOMFIM;
 
