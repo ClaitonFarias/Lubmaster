@@ -69,8 +69,8 @@ public class CalcularVlrUnitarioSemIpiSt implements EventoProgramavelJava {
         logger.info("Valor total IPI: " + vlrTotalIpi);
         logger.info("Valor total ST: " + vlrTotalSt);
 
-        vlrUnitarioIpi = vlrTotalIpi.divide(quantidade, MathContext.DECIMAL128).setScale(2,RoundingMode.HALF_EVEN);
-        vlrUnitarioSt = vlrTotalSt.divide(quantidade, MathContext.DECIMAL128).setScale(2, RoundingMode.HALF_EVEN);
+        vlrUnitarioIpi = vlrTotalIpi.divide(quantidade, MathContext.DECIMAL128).setScale(6,RoundingMode.HALF_EVEN);
+        vlrUnitarioSt = vlrTotalSt.divide(quantidade, MathContext.DECIMAL128).setScale(6, RoundingMode.HALF_EVEN);
         percIpiUnitario = vlrUnitarioIpi.divide(vlrUnitario, MathContext.DECIMAL128).setScale(6, RoundingMode.HALF_EVEN);
         percStUnitario = vlrUnitarioSt.divide(vlrUnitario, MathContext.DECIMAL128).setScale(6, RoundingMode.HALF_EVEN);
 
