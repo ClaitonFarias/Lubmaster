@@ -77,6 +77,8 @@ public class ValidarVlrDigitadovPrecoMinimoRegra implements Regra {
                 BigDecimal nuTab = NativeSql.getBigDecimal("TPV.AD_CODTABVLRMIN", "TGFTPV TPV, TGFCAB CAB", "TPV.CODTIPVENDA = CAB.CODTIPVENDA AND TPV.DHALTER = CAB.DHTIPVENDA AND CAB.NUNOTA = ?", new Object[]{nuNota});
 
                 BigDecimal precoMinimo = buscarPrecoMinimo(nuTab, codProd, codLocal, controle);
+                logger.info("Preco Minimo: " +precoMinimo);
+                logger.info("Vlr Unitario Digitado: " +vlrUnitBrutoDigitado);
 
                 if(vlrUnitBrutoDigitado.compareTo(precoMinimo) < 0){
                     LiberacaoAlcadaHelper.apagaSolicitacoEvento(evento,nuNota,tabela,sequencia);
@@ -215,19 +217,28 @@ public class ValidarVlrDigitadovPrecoMinimoRegra implements Regra {
 
             if(topConfigParaCalcularVlrUnitario){
 
-                BigDecimal precoMinimo = buscarPrecoMinimo(nuNota,codProd,codLocal,controle);
+                BigDecimal nuTab = NativeSql.getBigDecimal("TPV.AD_CODTABVLRMIN", "TGFTPV TPV, TGFCAB CAB", "TPV.CODTIPVENDA = CAB.CODTIPVENDA AND TPV.DHALTER = CAB.DHTIPVENDA AND CAB.NUNOTA = ?", new Object[]{nuNota});
+
+                BigDecimal precoMinimo = buscarPrecoMinimo(nuTab,codProd,codLocal,controle);
+                logger.info("Preco Minimo: " +precoMinimo);
+                logger.info("Vlr Unitario Digitado: " +vlrUnitBrutoDigitado);
 
                 if(vlrUnitBrutoDigitado.compareTo(precoMinimo) < 0){
+                    logger.info("Entrou no if: if(vlrUnitBrutoDigitado.compareTo(precoMinimo) < 0)");
 
                     BigDecimal valorLiberado = buscarValorLiberado(nuNota,tabela,evento,sequencia,1,0);
+                    logger.info("Valor Liberado: " +valorLiberado);
 
                     if(valorLiberado.compareTo(BigDecimal.ZERO) == 0 || vlrUnitBrutoDigitado.compareTo(valorLiberado) < 0) {
+                        logger.info("Entrou no if: if(valorLiberado.compareTo(BigDecimal.ZERO) == 0 || vlrUnitBrutoDigitado.compareTo(valorLiberado) < 0)");
                         LiberacaoAlcadaHelper.apagaSolicitacoEvento(evento,nuNota,tabela,sequencia);
 
                         insereLiberacao(nuNota,sequencia,codProd,vlrUnitBrutoDigitado,precoMinimo,codUsu,controle,tabela,evento,ctx);
                     }
 
                 } else if (vlrUnitBrutoDigitado.compareTo(precoMinimo) >= 0) {
+                    logger.info("Entrou no else: (vlrUnitBrutoDigitado.compareTo(precoMinimo) >= 0)");
+
                     LiberacaoAlcadaHelper.apagaSolicitacoEvento(evento,nuNota,tabela,sequencia);
                 }
 
